@@ -18,7 +18,7 @@ from src.core.network import (
     get_current_network_name
 )
 from src.core.dns import apply_dns
-from src.core.config import load_profiles, load_settings, save_settings
+from src.core.config import load_profiles, load_settings, save_settings, get_resource_path
 from src.core.shield import (
     test_adblocking,
     test_dnssec_validation,
@@ -44,7 +44,7 @@ class ApplyLogModal(ctk.CTkToplevel):
         self.attributes("-topmost", True)
         self.resizable(False, False)
 
-        assets_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "assets")
+        assets_dir = get_resource_path("assets")
         app_icon_path = os.path.join(assets_dir, "app_icon.ico")
         if os.path.exists(app_icon_path):
             self.after(200, lambda: self.iconbitmap(app_icon_path))
@@ -211,7 +211,7 @@ class CipherDNSApp(ctk.CTk):
                 pass
 
     def setup_tray(self):
-        assets_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "assets")
+        assets_dir = get_resource_path("assets")
         app_icon_png = os.path.join(assets_dir, "app_icon.png")
 
         try:
@@ -412,7 +412,7 @@ class CipherDNSApp(ctk.CTk):
 
     def load_images(self):
         self.icons = {}
-        assets_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "assets")
+        assets_dir = get_resource_path("assets")
 
         app_icon_ico = os.path.join(assets_dir, "app_icon.ico")
         app_icon_png = os.path.join(assets_dir, "app_icon.png")
@@ -725,7 +725,7 @@ class CipherDNSApp(ctk.CTk):
         win.attributes("-topmost", True)
         win.resizable(False, False)
 
-        assets_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "assets")
+        assets_dir = get_resource_path("assets")
         app_icon_path = os.path.join(assets_dir, "app_icon.ico")
         if os.path.exists(app_icon_path):
             win.after(200, lambda: win.iconbitmap(app_icon_path))
@@ -760,7 +760,7 @@ class CipherDNSApp(ctk.CTk):
         win.geometry("400x380")
         win.attributes("-topmost", True)
 
-        assets_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "assets")
+        assets_dir = get_resource_path("assets")
         app_icon_path = os.path.join(assets_dir, "app_icon.ico")
         if os.path.exists(app_icon_path):
             win.after(200, lambda: win.iconbitmap(app_icon_path))
@@ -829,7 +829,7 @@ class CipherDNSApp(ctk.CTk):
         info_win.attributes("-topmost", True)
         info_win.resizable(False, False)
 
-        assets_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "assets")
+        assets_dir = get_resource_path("assets")
         app_icon_path = os.path.join(assets_dir, "app_icon.ico")
         if os.path.exists(app_icon_path):
             info_win.after(200, lambda: info_win.iconbitmap(app_icon_path))
@@ -876,7 +876,7 @@ class CipherDNSApp(ctk.CTk):
         win.attributes("-topmost", True)
         win.resizable(False, False)
 
-        assets_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "assets")
+        assets_dir = get_resource_path("assets")
         app_icon_path = os.path.join(assets_dir, "app_icon.ico")
         if os.path.exists(app_icon_path):
             win.after(200, lambda: win.iconbitmap(app_icon_path))
