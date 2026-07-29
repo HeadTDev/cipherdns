@@ -7,7 +7,7 @@ class ProfileCard(ctk.CTkFrame):
         bw = 2 if is_selected else 2
         
         super().__init__(master, corner_radius=10, 
-                         width=195, height=175, 
+                         width=215, height=180, 
                          fg_color=bg_color,
                          border_width=bw,
                          border_color=border_color)
@@ -22,8 +22,8 @@ class ProfileCard(ctk.CTkFrame):
         self.bind("<Button-1>", self.on_click)
         
         # --- ELSŐ LAP (FRONT) ---
-        self.front_frame = ctk.CTkFrame(self, fg_color="transparent", width=188, height=168)
-        self.front_frame.place(x=97.5, y=87.5, anchor="center")
+        self.front_frame = ctk.CTkFrame(self, fg_color="transparent", width=207, height=172)
+        self.front_frame.place(x=107.5, y=90, anchor="center")
         self.front_frame.pack_propagate(False)
         self.front_frame.bind("<Button-1>", self.on_click)
         
@@ -33,21 +33,22 @@ class ProfileCard(ctk.CTkFrame):
             letter = profile['name'][0].upper() if profile.get('name') else "?"
             self.icon = ctk.CTkLabel(self.front_frame, text=letter, font=ctk.CTkFont(size=36, weight="bold"), text_color="gray50")
         
-        self.icon.pack(pady=(12, 5))
+        self.icon.pack(pady=(10, 4))
         self.icon.bind("<Button-1>", self.on_click)
             
-        self.name_label = ctk.CTkLabel(self.front_frame, text=profile['name'], font=ctk.CTkFont(size=14, weight="bold"), justify="center", wraplength=180)
-        self.name_label.pack(padx=5, fill="x")
+        self.name_label = ctk.CTkLabel(self.front_frame, text=profile['name'], font=ctk.CTkFont(size=13, weight="bold"), justify="center", wraplength=198)
+        self.name_label.pack(padx=4, fill="x")
         self.name_label.bind("<Button-1>", self.on_click)
         
-        self.desc_label = ctk.CTkLabel(self.front_frame, text=profile['description'], font=ctk.CTkFont(size=12), text_color=("gray40", "gray60"), justify="center", wraplength=180)
-        self.desc_label.pack(padx=5, pady=(0, 2), fill="both", expand=True)
+        # Description text constrained so it never overflows into bottom icons
+        self.desc_label = ctk.CTkLabel(self.front_frame, text=profile['description'], font=ctk.CTkFont(size=11), text_color=("gray40", "gray60"), justify="center", wraplength=198, height=42)
+        self.desc_label.pack(padx=4, pady=(2, 0), fill="x", expand=False)
         self.desc_label.bind("<Button-1>", self.on_click)
 
         # --- HÁTSÓ LAP (BACK) ---
-        self.back_frame = ctk.CTkFrame(self, fg_color="transparent", width=188, height=168)
+        self.back_frame = ctk.CTkFrame(self, fg_color="transparent", width=207, height=172)
         # Rejtve (jobbra kitolva) indul
-        self.back_frame.place(x=292.5, y=87.5, anchor="center")
+        self.back_frame.place(x=322.5, y=90, anchor="center")
         self.back_frame.pack_propagate(False)
         self.back_frame.bind("<Button-1>", self.on_click)
         
@@ -61,26 +62,26 @@ class ProfileCard(ctk.CTkFrame):
         doh_str = raw_doh.replace("https://", "").split("/")[0] if raw_doh != "None" else "None"
         
         inner_back = ctk.CTkFrame(self.back_frame, fg_color="transparent")
-        inner_back.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.92)
+        inner_back.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.94)
         
 
-        ctk.CTkLabel(inner_back, text="IPv4", font=ctk.CTkFont(size=10, weight="bold"), text_color="#D9534F", height=14, anchor="w").pack(anchor="w", padx=10)
+        ctk.CTkLabel(inner_back, text="IPv4", font=ctk.CTkFont(size=10, weight="bold"), text_color="#D9534F", height=14, anchor="w").pack(anchor="w", padx=8)
         lbl_v4 = ctk.CTkLabel(inner_back, text=ipv4_str, font=ctk.CTkFont(size=12, weight="bold"), text_color="gray90", height=16, anchor="w")
-        lbl_v4.pack(anchor="w", padx=10, pady=(0, 5))
+        lbl_v4.pack(anchor="w", padx=8, pady=(0, 4))
         
-        ctk.CTkLabel(inner_back, text="IPv6", font=ctk.CTkFont(size=10, weight="bold"), text_color="#D9534F", height=14, anchor="w").pack(anchor="w", padx=10)
+        ctk.CTkLabel(inner_back, text="IPv6", font=ctk.CTkFont(size=10, weight="bold"), text_color="#D9534F", height=14, anchor="w").pack(anchor="w", padx=8)
         lbl_v6 = ctk.CTkLabel(inner_back, text=ipv6_str, font=ctk.CTkFont(size=11, weight="bold"), text_color="gray90", height=16, anchor="w")
-        lbl_v6.pack(anchor="w", padx=10, pady=(0, 5))
+        lbl_v6.pack(anchor="w", padx=8, pady=(0, 4))
         
-        ctk.CTkLabel(inner_back, text="DoH Hostname", font=ctk.CTkFont(size=10, weight="bold"), text_color="#D9534F", height=14, anchor="w").pack(anchor="w", padx=10)
+        ctk.CTkLabel(inner_back, text="DoH Hostname", font=ctk.CTkFont(size=10, weight="bold"), text_color="#D9534F", height=14, anchor="w").pack(anchor="w", padx=8)
         lbl_doh = ctk.CTkLabel(inner_back, text=doh_str, font=ctk.CTkFont(size=11), text_color="gray80", height=16, anchor="w")
-        lbl_doh.pack(anchor="w", padx=10)
+        lbl_doh.pack(anchor="w", padx=8)
         
         for w in inner_back.winfo_children():
             w.bind("<Button-1>", self.on_click)
         inner_back.bind("<Button-1>", self.on_click)
 
-        # --- FELÜLRÉTEGEZETT ELEMEK (Gombok, Badgek - ezek nem mozognak) ---
+        # --- FELÜLRÉTEGEZETT ELEMEK (Gombok, Badgek) ---
         if is_active:
             self.badge_frame = ctk.CTkFrame(self, fg_color="#C9302C", corner_radius=9, width=40, height=20)
             self.badge_frame.place(relx=0.96, rely=0.04, anchor="ne")
@@ -107,13 +108,13 @@ class ProfileCard(ctk.CTkFrame):
                     ping_color = "#CC0000"
                     
             self.ping_lbl = ctk.CTkLabel(self, text=ping_text, font=ctk.CTkFont(size=12, weight="bold"), text_color=ping_color)
-            self.ping_lbl.place(relx=0.05, rely=0.04, anchor="nw")
+            self.ping_lbl.place(relx=0.04, rely=0.04, anchor="nw")
             self.ping_lbl.bind("<Button-1>", self.on_click)
             
         features = profile.get('features', [])
         if features:
             self.feat_frame = ctk.CTkFrame(self, fg_color="transparent")
-            self.feat_frame.place(x=15, y=145)
+            self.feat_frame.place(x=10, y=150)
             
             for feat in features:
                 if feat == "malware": emoji, color = "⛨", "#FF6B6B"
@@ -122,7 +123,7 @@ class ProfileCard(ctk.CTkFrame):
                 elif feat == "family": emoji, color = "♥", "#55EFC4"
                 else: continue
                 
-                lbl = ctk.CTkLabel(self.feat_frame, text=emoji, font=ctk.CTkFont(size=14, weight="bold"), text_color=color)
+                lbl = ctk.CTkLabel(self.feat_frame, text=emoji, font=ctk.CTkFont(size=13, weight="bold"), text_color=color)
                 lbl.pack(side="left", padx=(0, 2))
                 lbl.bind("<Button-1>", self.on_click)
                 
@@ -187,12 +188,12 @@ class ProfileCard(ctk.CTkFrame):
     def flip_to_back(self):
         if self.is_flipped: return
         self.is_flipped = True
-        self.animate_slide(97.5, -97.5, 292.5, 97.5)
+        self.animate_slide(107.5, -107.5, 322.5, 107.5)
         
     def flip_to_front(self):
         if not self.is_flipped: return
         self.is_flipped = False
-        self.animate_slide(-97.5, 97.5, 97.5, 292.5)
+        self.animate_slide(-107.5, 107.5, 107.5, 322.5)
         
     def animate_slide(self, front_start, front_end, back_start, back_end):
         steps = 15
@@ -218,4 +219,3 @@ class ProfileCard(ctk.CTkFrame):
             self.flip_to_front()
         else:
             self.command(self.profile['id'])
-

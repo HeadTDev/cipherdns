@@ -110,7 +110,7 @@ class CipherDNSApp(ctk.CTk):
         super().__init__(fg_color=("#F5F5F5", "#080808"))
 
         self.title("CipherDNS")
-        self.geometry("980x760")
+        self.geometry("1020x760")
         self.resizable(False, False)
 
         # Check if launched in autostart / silent mode
@@ -697,7 +697,7 @@ class CipherDNSApp(ctk.CTk):
                 row += 1
 
         # Add custom DNS card (+)
-        add_card = ctk.CTkFrame(self.cards_frame, corner_radius=10, width=195, height=175, fg_color="transparent", border_width=2, border_color="gray30")
+        add_card = ctk.CTkFrame(self.cards_frame, corner_radius=10, width=215, height=180, fg_color="transparent", border_width=2, border_color="gray30")
         add_card.pack_propagate(False)
         add_card.grid_propagate(False)
         add_card.bind("<Button-1>", self.open_add_custom_dialog)

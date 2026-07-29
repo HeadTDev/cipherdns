@@ -16,9 +16,21 @@ class DeepLeakAuditModal(ctk.CTkToplevel):
         self.doh_url = doh_url
         
         self.title("CipherDNS - Privacy & DNS Leak Audit")
-        self.geometry("700x530")
         self.resizable(False, False)
         self.configure(fg_color="#0D0D0D")
+        
+        # Center relative to parent
+        self.update_idletasks()
+        if parent:
+            p_x = parent.winfo_x()
+            p_y = parent.winfo_y()
+            p_w = parent.winfo_width()
+            p_h = parent.winfo_height()
+            c_x = max(0, p_x + (p_w - 700) // 2)
+            c_y = max(0, p_y + (p_h - 530) // 2)
+            self.geometry(f"700x530+{c_x}+{c_y}")
+        else:
+            self.geometry("700x530")
         
         # Window Icon
         assets_dir = get_resource_path("assets")
@@ -26,7 +38,6 @@ class DeepLeakAuditModal(ctk.CTkToplevel):
         if os.path.exists(app_icon_path):
             self.after(200, lambda: self.iconbitmap(app_icon_path))
             
-        # Center relative to parent
         self.transient(parent)
         self.grab_set()
         
