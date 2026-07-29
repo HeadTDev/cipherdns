@@ -54,6 +54,7 @@ Pre-built binary executables can be downloaded from the **[GitHub Releases](http
 ### Prerequisites
 - Windows 10 or Windows 11 (Run as Administrator)
 - Python 3.10+ or [`uv`](https://github.com/astral-sh/uv)
+- [Inno Setup 6](https://www.innosetup.com/) (optional, for building setup installer)
 
 ### Steps
 
@@ -79,8 +80,8 @@ Pre-built binary executables can be downloaded from the **[GitHub Releases](http
    ```
 
 5. **Build Setup Installer**:
-   ```powershell
-   & "C:\Users\headtdev\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer.iss
+   ```bash
+   iscc installer.iss
    ```
 
 ---
