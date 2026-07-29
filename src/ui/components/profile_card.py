@@ -63,6 +63,7 @@ class ProfileCard(ctk.CTkFrame):
         inner_back = ctk.CTkFrame(self.back_frame, fg_color="transparent")
         inner_back.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.92)
         
+
         ctk.CTkLabel(inner_back, text="IPv4", font=ctk.CTkFont(size=10, weight="bold"), text_color="#D9534F", height=14, anchor="w").pack(anchor="w", padx=10)
         lbl_v4 = ctk.CTkLabel(inner_back, text=ipv4_str, font=ctk.CTkFont(size=12, weight="bold"), text_color="gray90", height=16, anchor="w")
         lbl_v4.pack(anchor="w", padx=10, pady=(0, 5))
@@ -108,6 +109,24 @@ class ProfileCard(ctk.CTkFrame):
             self.ping_lbl = ctk.CTkLabel(self, text=ping_text, font=ctk.CTkFont(size=12, weight="bold"), text_color=ping_color)
             self.ping_lbl.place(relx=0.05, rely=0.04, anchor="nw")
             self.ping_lbl.bind("<Button-1>", self.on_click)
+            
+        features = profile.get('features', [])
+        if features:
+            self.feat_frame = ctk.CTkFrame(self, fg_color="transparent")
+            self.feat_frame.place(x=15, y=145)
+            
+            for feat in features:
+                if feat == "malware": emoji, color = "⛨", "#FF6B6B"
+                elif feat == "ads": emoji, color = "⊘", "#FDCB6E"
+                elif feat == "trackers": emoji, color = "◉", "#74B9FF"
+                elif feat == "family": emoji, color = "♥", "#55EFC4"
+                else: continue
+                
+                lbl = ctk.CTkLabel(self.feat_frame, text=emoji, font=ctk.CTkFont(size=14, weight="bold"), text_color=color)
+                lbl.pack(side="left", padx=(0, 2))
+                lbl.bind("<Button-1>", self.on_click)
+                
+            self.feat_frame.bind("<Button-1>", self.on_click)
 
         if on_configure:
             cfg_btn = ctk.CTkButton(self, text="EDIT", width=46, height=24, corner_radius=6, fg_color="#333333", text_color="white", hover_color="#555555", font=ctk.CTkFont(weight="bold", size=11), command=lambda e=None: on_configure(self.profile['id']))
@@ -142,7 +161,7 @@ class ProfileCard(ctk.CTkFrame):
         border_color = ("#D9534F", "#D9534F") if is_selected else ("gray70", "#222222")
         bw = 2 if is_selected else 2
         self.configure(fg_color=bg_color, border_color=border_color, border_width=bw)
-        
+            
         if is_active:
             if not hasattr(self, 'badge_frame'):
                 self.badge_frame = ctk.CTkFrame(self, fg_color="#C9302C", corner_radius=9, width=40, height=20)
