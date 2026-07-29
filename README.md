@@ -39,11 +39,11 @@ It directly interfaces with native Windows network subsystems and registry param
 
 ## 📦 Downloads & Installation
 
-Pre-built executables are available in the [`dist/`](file:///C:/Users/headtdev/Documents/Fork/cipherdns/dist) folder:
+Pre-built binary executables can be downloaded from the **[GitHub Releases](https://github.com/HeadTDev/cipherdns/releases)** page or compiled locally into the `dist/` directory:
 
-- **Portable Executable**: [`dist/CipherDNS_Portable.exe`](file:///C:/Users/headtdev/Documents/Fork/cipherdns/dist/CipherDNS_Portable.exe)
+- **Portable Executable**: `CipherDNS_Portable.exe`
   *Single standalone binary. No installation required. Saves settings to `%APPDATA%\CipherDNS`.*
-- **Setup Installer**: [`dist/CipherDNS_Setup.exe`](file:///C:/Users/headtdev/Documents/Fork/cipherdns/dist/CipherDNS_Setup.exe)
+- **Setup Installer**: `CipherDNS_Setup.exe`
   *Official installer wizard with Start Menu shortcuts, Desktop icon, and Control Panel Uninstaller.*
   *Fully compatible with **Windows x64** and **Windows 11 ARM64** (via Prism emulation).*
 
@@ -59,7 +59,7 @@ Pre-built executables are available in the [`dist/`](file:///C:/Users/headtdev/D
 
 1. **Clone the repository**:
    ```bash
-   git clone https.github.com/HeadTDev/cipherdns.git
+   git clone https://github.com/HeadTDev/cipherdns.git
    cd cipherdns
    ```
 
@@ -80,7 +80,7 @@ Pre-built executables are available in the [`dist/`](file:///C:/Users/headtdev/D
 
 5. **Build Setup Installer**:
    ```powershell
-   & "C:\Program Files\Inno Setup 6\ISCC.exe" installer.iss
+   & "C:\Users\headtdev\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer.iss
    ```
 
 ---
