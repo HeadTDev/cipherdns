@@ -879,15 +879,17 @@ class CipherDNSApp(ctk.CTk):
             active_prof = next((p for p in self.profiles if p['id'] == prof_id), None)
             if active_prof:
                 active_prof_name = active_prof.get("name", "Custom DNS")
-                doh_url = active_prof.get("doh_v4", {}).get("template", "") or active_prof.get("doh_template", "")
+                doh_url = (
+                    active_prof.get("doh", "") or 
+                    active_prof.get("doh_v4", {}).get("template", "") or 
+                    active_prof.get("doh_template", "")
+                )
+                if active_prof.get("id") == "nextdns":
+                    nextdns_id = self.app_settings.get("nextdns_id", "").strip()
+                    if nextdns_id:
+                        doh_url = f"https://dns.nextdns.io/{nextdns_id}"
 
         DeepLeakAuditModal(self, active_provider_name=active_prof_name, doh_url=doh_url)
-
-        leak_btn = ctk.CTkButton(
-            btn_frame, text="Run Advanced Leak Test", command=lambda: webbrowser.open("https://dnsleaktest.com"),
-            height=36, width=210, fg_color="#C9302C", hover_color="#AC2925", font=ctk.CTkFont(weight="bold", size=12)
-        )
-        leak_btn.pack(side="right")
 
     def apply_dns_action(self):
         if self.is_applying:

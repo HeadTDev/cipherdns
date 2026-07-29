@@ -59,9 +59,13 @@ def test_doh_tls_status(doh_url: str) -> tuple[bool, str, str]:
     Inspects TLS connection to the DoH endpoint URL.
     Returns: (is_connected: bool, tls_version: str, details: str)
     """
-    if not doh_url or not doh_url.startswith("https://"):
+    if not doh_url or not isinstance(doh_url, str):
         return False, "N/A", "No DoH URL configured for active provider."
         
+    doh_url = doh_url.strip()
+    if not doh_url.startswith("https://") and not doh_url.startswith("http://"):
+        doh_url = "https://" + doh_url.lstrip("/")
+
     parsed = urllib.parse.urlparse(doh_url)
     hostname = parsed.hostname
     port = parsed.port or 443
@@ -72,7 +76,7 @@ def test_doh_tls_status(doh_url: str) -> tuple[bool, str, str]:
     try:
         context = ssl.create_default_context()
         start_t = time.perf_counter()
-        with socket.create_connection((hostname, port), timeout=2.5) as sock:
+        with socket.create_connection((hostname, port), timeout=3.0) as sock:
             with context.wrap_socket(sock, server_hostname=hostname) as ssock:
                 tls_ver = ssock.version() or "TLS 1.3"
                 rtt_ms = int((time.perf_counter() - start_t) * 1000)
