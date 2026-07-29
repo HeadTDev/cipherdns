@@ -14,11 +14,18 @@ from src.core.network import (
     get_network_adapters,
     get_active_profile,
     ping_profile,
+    benchmark_profiles,
     get_current_network_name
 )
 from src.core.dns import apply_dns
 from src.core.config import load_profiles, load_settings, save_settings
-from src.core.shield import test_adblocking
+from src.core.shield import (
+    test_adblocking,
+    test_dnssec_validation,
+    test_doh_tls_status,
+    flush_dns_cache
+)
+from src.core.autostart import is_autostart_enabled, set_autostart
 from src.ui.components.profile_card import ProfileCard
 
 try:
@@ -33,7 +40,7 @@ class ApplyLogModal(ctk.CTkToplevel):
     def __init__(self, master, profile_name: str, adapter_name: str):
         super().__init__(master)
         self.title("DNS Configuration Log")
-        self.geometry("560x420")
+        self.geometry("580x440")
         self.attributes("-topmost", True)
         self.resizable(False, False)
 
@@ -43,15 +50,15 @@ class ApplyLogModal(ctk.CTkToplevel):
             self.after(200, lambda: self.iconbitmap(app_icon_path))
 
         self.update_idletasks()
-        x = master.winfo_x() + (master.winfo_width() - 560) // 2
-        y = master.winfo_y() + (master.winfo_height() - 420) // 2
+        x = master.winfo_x() + (master.winfo_width() - 580) // 2
+        y = master.winfo_y() + (master.winfo_height() - 440) // 2
         self.geometry(f"+{x}+{y}")
 
         self.header = ctk.CTkLabel(
             self, text="⚙️ Applying DNS Configuration...",
             font=ctk.CTkFont(size=18, weight="bold"), text_color="#D9534F"
         )
-        self.header.pack(pady=(15, 5))
+        self.header.pack(pady=(18, 5))
 
         self.sub_header = ctk.CTkLabel(
             self, text=f"Profile: {profile_name}  |  Adapter: {adapter_name}",
@@ -61,7 +68,7 @@ class ApplyLogModal(ctk.CTkToplevel):
 
         # Log Text Area
         self.textbox = ctk.CTkTextbox(
-            self, width=510, height=250,
+            self, width=530, height=260,
             font=ctk.CTkFont(family="Consolas", size=11),
             fg_color="#101010", text_color="#00FF00", corner_radius=8
         )
@@ -70,7 +77,7 @@ class ApplyLogModal(ctk.CTkToplevel):
 
         self.close_btn = ctk.CTkButton(
             self, text="Close", command=self.destroy,
-            width=130, height=36, fg_color="#333333", hover_color="#555555",
+            width=140, height=38, fg_color="#333333", hover_color="#555555",
             font=ctk.CTkFont(weight="bold"), state="disabled"
         )
         self.close_btn.pack(pady=12)
@@ -103,8 +110,13 @@ class CipherDNSApp(ctk.CTk):
         super().__init__(fg_color=("#F5F5F5", "#080808"))
 
         self.title("CipherDNS")
-        self.geometry("920x720")
+        self.geometry("980x760")
         self.resizable(False, False)
+
+        # Check if launched in autostart / silent mode
+        self.is_silent_autostart = "--autostart" in sys.argv
+        if self.is_silent_autostart:
+            self.withdraw()
 
         # 1. Immediate local profile & settings loading (0ms)
         self.base_profiles = load_profiles()
@@ -122,16 +134,20 @@ class CipherDNSApp(ctk.CTk):
         self.last_seen_network = None
         self.monitoring = True
         self.is_applying = False
+        self.is_benchmarking = False
         self.last_apply_logs = []
 
-        # 2. Load icons & Build UI immediately (0ms delay, instant window display)
+        # 2. Load icons & Build UI immediately
         self.load_images()
         self.build_ui()
 
         self.protocol("WM_DELETE_WINDOW", self.hide_window)
         self.setup_tray()
 
-        # 3. Asynchronously query network adapters & active profile in background without blocking UI
+        if self.is_silent_autostart and hasattr(self, 'tray_icon') and self.tray_icon:
+            self.after(1000, lambda: self.tray_icon.notify("CipherDNS started silently in the background.", "CipherDNS Auto-Start"))
+
+        # 3. Asynchronously query network adapters & active profile in background
         threading.Thread(target=self._async_initial_adapter_check, daemon=True).start()
 
         # 4. Start speed test
@@ -220,8 +236,12 @@ class CipherDNSApp(ctk.CTk):
             if profile:
                 self.after(0, lambda: self._apply_dns_from_tray(profile))
 
+        def on_flush_dns_tray(icon, item):
+            self.after(0, self.trigger_flush_dns)
+
         menu_items = [
             item("Show CipherDNS", on_show, default=True),
+            item("🧹 Flush DNS Cache", on_flush_dns_tray),
             pystray.Menu.SEPARATOR
         ]
 
@@ -257,8 +277,12 @@ class CipherDNSApp(ctk.CTk):
             if profile:
                 self.after(0, lambda: self._apply_dns_from_tray(profile))
 
+        def on_flush_dns_tray(icon, item):
+            self.after(0, self.trigger_flush_dns)
+
         menu_items = [
             item("Show CipherDNS", on_show, default=True),
+            item("🧹 Flush DNS Cache", on_flush_dns_tray),
             pystray.Menu.SEPARATOR
         ]
 
@@ -272,13 +296,28 @@ class CipherDNSApp(ctk.CTk):
 
         self.tray_icon.menu = pystray.Menu(*menu_items)
 
+    def trigger_flush_dns(self):
+        def run_flush():
+            success, msg = flush_dns_cache()
+            self.after(0, lambda: self._on_flush_complete(success, msg))
+
+        threading.Thread(target=run_flush, daemon=True).start()
+
+    def _on_flush_complete(self, success: bool, msg: str):
+        if success:
+            self.status_label.configure(text="✅ DNS Cache Flushed!", text_color="#00FF00")
+            if hasattr(self, 'tray_icon') and self.tray_icon:
+                self.tray_icon.notify("DNS resolver cache cleared.", "CipherDNS")
+        else:
+            self.status_label.configure(text=f"❌ Flush Error: {msg}", text_color="#D9534F")
+
     def _apply_dns_from_tray(self, profile):
         if profile['id'] == 'nextdns' and not profile.get('is_configured'):
             self.tray_icon.notify("NextDNS is not configured. Please open the app.", "CipherDNS Error")
             return
 
         adapter = self.adapter_var.get()
-        if adapter == "No active adapter":
+        if adapter in ["No active adapter", "Scanning adapters..."]:
             self.tray_icon.notify("Error: No network adapter selected!", "CipherDNS Error")
             return
 
@@ -300,7 +339,7 @@ class CipherDNSApp(ctk.CTk):
             self.tray_icon.notify(f"Failed to apply: {msg}", "CipherDNS Error")
 
     def start_speed_test(self):
-        if hasattr(self, 'status_label'):
+        if hasattr(self, 'status_label') and not self.is_benchmarking:
             self.status_label.configure(text="Running speed tests...", text_color="yellow")
         threading.Thread(target=self._run_pings_in_background, daemon=True).start()
 
@@ -323,9 +362,53 @@ class CipherDNSApp(ctk.CTk):
         self.after(0, self._on_speed_test_complete)
 
     def _on_speed_test_complete(self):
-        if not self.is_applying and hasattr(self, 'status_label'):
+        if not self.is_applying and not self.is_benchmarking and hasattr(self, 'status_label'):
             self.status_label.configure(text="Ready.", text_color="gray")
         self.render_cards(force_rebuild=False)
+
+    def auto_select_fastest(self):
+        """Runs a 3-sample latency benchmark across all providers and applies the fastest one automatically."""
+        if self.is_benchmarking or self.is_applying:
+            return
+
+        self.is_benchmarking = True
+        self.auto_fastest_btn.configure(state="disabled")
+        self.status_label.configure(text="⚡ Benchmarking lowest latency DNS...", text_color="yellow")
+
+        def run_benchmark():
+            fastest_id, results = benchmark_profiles(self.profiles, samples_count=3)
+            self.after(0, lambda: self._on_benchmark_complete(fastest_id, results))
+
+        threading.Thread(target=run_benchmark, daemon=True).start()
+
+    def _on_benchmark_complete(self, fastest_id: str | None, results: dict[str, int]):
+        self.is_benchmarking = False
+        self.auto_fastest_btn.configure(state="normal")
+
+        if results:
+            for pid, avg_ms in results.items():
+                self.pings[pid] = avg_ms
+
+        if fastest_id:
+            self.fastest_profile_id = fastest_id
+            fastest_prof = next((p for p in self.profiles if p['id'] == fastest_id), None)
+            if fastest_prof:
+                self.selected_profile_id = fastest_id
+                self.render_cards(force_rebuild=False)
+                self.status_label.configure(text=f"⚡ Auto-selected fastest: {fastest_prof['name']} ({results.get(fastest_id, 0)}ms)", text_color="#00FF00")
+                # Automatically apply the fastest DNS provider!
+                self.apply_dns_action()
+                return
+
+        self.status_label.configure(text="Benchmark complete.", text_color="gray")
+        self.render_cards(force_rebuild=False)
+
+    def on_autostart_toggle(self):
+        enabled = self.autostart_var.get()
+        success = set_autostart(enabled)
+        if not success:
+            self.autostart_var.set(not enabled)
+            self.status_label.configure(text="❌ Failed to update startup registry!", text_color="#D9534F")
 
     def load_images(self):
         self.icons = {}
@@ -363,38 +446,38 @@ class CipherDNSApp(ctk.CTk):
         save_settings(self.app_settings)
 
     def build_ui(self):
-        self.header = ctk.CTkLabel(self, text="🛡️ CipherDNS", font=ctk.CTkFont(size=28, weight="bold"), text_color="#D9534F")
-        self.header.pack(pady=(15, 0))
+        self.header = ctk.CTkLabel(self, text="🛡️ CipherDNS", font=ctk.CTkFont(size=30, weight="bold"), text_color="#D9534F")
+        self.header.pack(pady=(20, 0))
 
         self.subtitle = ctk.CTkLabel(self, text="Modern DNS over HTTPS (DoH) Manager", font=ctk.CTkFont(size=14), text_color="gray")
-        self.subtitle.pack(pady=(0, 10))
+        self.subtitle.pack(pady=(2, 12))
 
         self.legend_frame = ctk.CTkFrame(self, fg_color="#1A1A1A", corner_radius=12)
-        self.legend_frame.pack(pady=(0, 10), ipady=2, ipadx=10)
+        self.legend_frame.pack(pady=(0, 15), ipady=4, ipadx=12)
 
         items = [("⛨ Malware", "#FF6B6B"), ("⊘ Ads", "#FDCB6E"), ("◉ Trackers", "#74B9FF"), ("♥ Family", "#55EFC4")]
         for i, (text, color) in enumerate(items):
             lbl = ctk.CTkLabel(self.legend_frame, text=text, font=ctk.CTkFont(size=13, weight="bold"), text_color=color)
-            lbl.pack(side="left", padx=10)
+            lbl.pack(side="left", padx=12)
             if i < len(items) - 1:
                 sep = ctk.CTkLabel(self.legend_frame, text="•", font=ctk.CTkFont(size=13), text_color="gray40")
                 sep.pack(side="left")
 
         self.top_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.top_frame.pack(fill="x", padx=20, pady=5)
+        self.top_frame.pack(fill="x", padx=28, pady=8)
 
         self.left_frame = ctk.CTkFrame(self.top_frame, fg_color="transparent")
         self.left_frame.pack(side="left", anchor="n")
 
-        ctk.CTkLabel(self.left_frame, text="Network Adapter:", font=ctk.CTkFont(weight="bold", size=13)).pack(anchor="w", pady=(0, 5))
-        
+        ctk.CTkLabel(self.left_frame, text="Network Adapter:", font=ctk.CTkFont(weight="bold", size=13)).pack(anchor="w", pady=(0, 6))
+
         default_adapter = self.adapters[0] if self.adapters else "Scanning adapters..."
         self.adapter_var = ctk.StringVar(value=default_adapter)
         self.adapter_menu = ctk.CTkOptionMenu(
             self.left_frame,
             values=self.adapters if self.adapters else ["Scanning adapters..."],
             variable=self.adapter_var,
-            width=200,
+            width=220,
             fg_color="#1A1A1A",
             button_color="#C9302C",
             button_hover_color="#AC2925",
@@ -407,51 +490,77 @@ class CipherDNSApp(ctk.CTk):
 
         self.fallback_var = ctk.BooleanVar(value=False)
         self.fallback_switch = ctk.CTkSwitch(self.right_frame, text="Strict DoH ", variable=self.fallback_var, progress_color="#C9302C")
-        self.fallback_switch.grid(row=0, column=0, sticky="w", pady=(0, 5))
+        self.fallback_switch.grid(row=0, column=0, sticky="w", pady=(0, 4))
 
         self.info_btn = ctk.CTkButton(
-            self.right_frame, text="?", width=26, height=26, corner_radius=13,
-            fg_color="#333333", hover_color="#C9302C", font=ctk.CTkFont(weight="bold"), command=self.show_doh_info
+            self.right_frame, text="?", width=22, height=22, corner_radius=11,
+            fg_color="#333333", hover_color="#C9302C", font=ctk.CTkFont(weight="bold", size=11), command=self.show_doh_info
         )
-        self.info_btn.grid(row=0, column=1, sticky="w", padx=(5, 0), pady=(0, 5))
+        self.info_btn.grid(row=0, column=1, sticky="w", padx=(5, 0), pady=(0, 4))
 
         self.auto_switch_var = ctk.BooleanVar(value=self.app_settings.get("auto_switch", False))
         self.auto_switch_chk = ctk.CTkSwitch(
             self.right_frame, text="Auto-Switch (Smart Memory)", variable=self.auto_switch_var, progress_color="#00CC00", command=self.on_autoswitch_toggle
         )
-        self.auto_switch_chk.grid(row=1, column=0, columnspan=2, sticky="w")
+        self.auto_switch_chk.grid(row=1, column=0, columnspan=2, sticky="w", pady=(0, 4))
 
-        self.cards_title = ctk.CTkLabel(self, text="Available DNS Providers", font=ctk.CTkFont(weight="bold", size=15))
-        self.cards_title.pack(anchor="w", padx=25, pady=(5, 0))
+        # Windows Auto-Start Switch
+        self.autostart_var = ctk.BooleanVar(value=is_autostart_enabled())
+        self.autostart_chk = ctk.CTkSwitch(
+            self.right_frame, text="Start with Windows", variable=self.autostart_var, progress_color="#00CC00", command=self.on_autostart_toggle
+        )
+        self.autostart_chk.grid(row=2, column=0, columnspan=2, sticky="w")
+
+        # Cards Section Header
+        self.cards_header_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.cards_header_frame.pack(fill="x", padx=30, pady=(10, 5))
+
+        self.cards_title = ctk.CTkLabel(self.cards_header_frame, text="Available DNS Providers", font=ctk.CTkFont(weight="bold", size=16))
+        self.cards_title.pack(side="left")
+
+        # Auto-Select Fastest DNS Button
+        self.auto_fastest_btn = ctk.CTkButton(
+            self.cards_header_frame, text="⚡ Auto-Select Fastest", command=self.auto_select_fastest,
+            height=30, width=170, font=ctk.CTkFont(size=12, weight="bold"),
+            fg_color="#1A1A1A", hover_color="#333333", text_color="#00FF00", corner_radius=6
+        )
+        self.auto_fastest_btn.pack(side="right")
 
         self.cards_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.cards_frame.pack(fill="both", expand=True, padx=20, pady=5)
+        self.cards_frame.pack(fill="both", expand=True, padx=25, pady=5)
 
         self.card_widgets = []
 
         # --- SPACIOUS BOTTOM BAR ---
-        self.bottom_frame = ctk.CTkFrame(self, fg_color="#121212", corner_radius=10, height=65)
-        self.bottom_frame.pack(fill="x", side="bottom", padx=20, pady=(0, 15))
+        self.bottom_frame = ctk.CTkFrame(self, fg_color="#121212", corner_radius=10, height=74)
+        self.bottom_frame.pack(fill="x", side="bottom", padx=25, pady=(0, 12))
         self.bottom_frame.pack_propagate(False)
 
         self.status_label = ctk.CTkLabel(
             self.bottom_frame, text="Ready.", text_color="gray", font=ctk.CTkFont(size=14, weight="bold")
         )
-        self.status_label.pack(side="left", padx=15)
+        self.status_label.pack(side="left", padx=18)
 
         self.apply_btn = ctk.CTkButton(
-            self.bottom_frame, text="Apply DNS", command=self.apply_dns_action, height=45, width=150,
+            self.bottom_frame, text="Apply DNS", command=self.apply_dns_action, height=52, width=155,
             font=ctk.CTkFont(weight="bold", size=15), fg_color="#C9302C", hover_color="#AC2925", corner_radius=8
         )
-        self.apply_btn.pack(side="right", padx=12, pady=10)
+        self.apply_btn.pack(side="right", padx=12, pady=11)
 
         self.security_btn = ctk.CTkButton(
-            self.bottom_frame, text="🛡️ Security Check", command=self.open_security_check, height=45, width=160,
+            self.bottom_frame, text="🛡️ Security Check", command=self.open_security_check, height=52, width=165,
             font=ctk.CTkFont(weight="bold", size=14), fg_color="#262626", hover_color="#444444", corner_radius=8
         )
-        self.security_btn.pack(side="right", padx=0, pady=10)
+        self.security_btn.pack(side="right", padx=0, pady=11)
 
-        # Immediate 0ms rendering of DNS cards with local profile data
+        # 🧹 Flush DNS Cache Button
+        self.flush_btn = ctk.CTkButton(
+            self.bottom_frame, text="🧹 Flush Cache", command=self.trigger_flush_dns, height=52, width=135,
+            font=ctk.CTkFont(weight="bold", size=13), fg_color="#1A1A1A", hover_color="#333333", text_color="gray80", corner_radius=8
+        )
+        self.flush_btn.pack(side="right", padx=(0, 12), pady=11)
+
+        # Immediate 0ms rendering of DNS cards
         self.render_cards(force_rebuild=True)
 
     def refresh_adapters(self):
@@ -490,7 +599,7 @@ class CipherDNSApp(ctk.CTk):
 
     def _auto_apply_dns(self, target_id, network_name):
         adapter = self.adapter_var.get()
-        if adapter == "No active adapter" or adapter == "Scanning adapters...":
+        if adapter in ["No active adapter", "Scanning adapters..."]:
             return
 
         profile = next((p for p in self.profiles if p['id'] == target_id), None)
@@ -517,7 +626,7 @@ class CipherDNSApp(ctk.CTk):
         else:
             self.active_profile_id = None
 
-        if not self.is_applying and "tests" not in self.status_label.cget("text"):
+        if not self.is_applying and not self.is_benchmarking and "tests" not in self.status_label.cget("text"):
             self.status_label.configure(text="Ready.", text_color="gray")
         self.render_cards(force_rebuild=False)
 
@@ -525,7 +634,6 @@ class CipherDNSApp(ctk.CTk):
         self.update_active_profile()
 
     def render_cards(self, force_rebuild=False):
-        # Non-destructive in-place update if card widgets already exist
         if not force_rebuild and len(self.card_widgets) == len(self.profiles) + 1:
             for card in self.card_widgets:
                 if getattr(card, 'is_add_card', False):
@@ -568,7 +676,7 @@ class CipherDNSApp(ctk.CTk):
                 on_configure=on_configure, on_delete=on_delete, has_info=has_info
             )
 
-            card.grid(row=row, column=col, padx=8, pady=8)
+            card.grid(row=row, column=col, padx=10, pady=10)
             self.card_widgets.append(card)
 
             col += 1
@@ -591,7 +699,7 @@ class CipherDNSApp(ctk.CTk):
         lbl2.place(relx=0.5, rely=0.7, anchor="center")
         lbl2.bind("<Button-1>", self.open_add_custom_dialog)
 
-        add_card.grid(row=row, column=col, padx=8, pady=8)
+        add_card.grid(row=row, column=col, padx=10, pady=10)
         self.card_widgets.append(add_card)
 
     def select_profile(self, profile_id):
@@ -751,8 +859,8 @@ class CipherDNSApp(ctk.CTk):
         import webbrowser
 
         win = ctk.CTkToplevel(self)
-        win.title("Security Check")
-        win.geometry("520x460")
+        win.title("DNS Security & Diagnostics Check")
+        win.geometry("560x540")
         win.attributes("-topmost", True)
         win.resizable(False, False)
 
@@ -762,14 +870,14 @@ class CipherDNSApp(ctk.CTk):
             win.after(200, lambda: win.iconbitmap(app_icon_path))
 
         win.update_idletasks()
-        x = self.winfo_x() + (self.winfo_width() - 520) // 2
-        y = self.winfo_y() + (self.winfo_height() - 460) // 2
+        x = self.winfo_x() + (self.winfo_width() - 560) // 2
+        y = self.winfo_y() + (self.winfo_height() - 540) // 2
         win.geometry(f"+{x}+{y}")
 
-        ctk.CTkLabel(win, text="DNS Security Check", font=ctk.CTkFont(size=18, weight="bold"), text_color="#D9534F").pack(pady=(20, 10))
+        ctk.CTkLabel(win, text="DNS Security & Diagnostics Check", font=ctk.CTkFont(size=18, weight="bold"), text_color="#D9534F").pack(pady=(15, 10))
 
         status_frame = ctk.CTkFrame(win, fg_color="#121212", corner_radius=10)
-        status_frame.pack(fill="both", expand=True, padx=20, pady=10)
+        status_frame.pack(fill="both", expand=True, padx=20, pady=5)
 
         adapter = self.adapter_var.get()
         active_prof = None
@@ -777,49 +885,93 @@ class CipherDNSApp(ctk.CTk):
             prof_id = get_active_profile(adapter, self.profiles)
             active_prof = next((p for p in self.profiles if p['id'] == prof_id), None)
 
+        # 1. OS Configuration Encryption Status
         if not active_prof or active_prof['id'] == 'clear':
             status_text = "INSECURE (Standard DNS)"
             status_color = "#D9534F"
-            desc = "Your DNS queries are currently unencrypted and visible to your ISP. Anyone on your local network can see which websites you visit."
+            desc = "Your DNS queries are currently unencrypted and visible to your ISP."
         else:
             status_text = "SECURE (Encrypted DoH)"
             status_color = "#00FF00"
-            desc = f"Your DNS queries are encrypted using {active_prof['name']}. Your ISP cannot intercept or read your DNS traffic."
+            desc = f"Your DNS queries are encrypted using {active_prof['name']}."
 
-        ctk.CTkLabel(status_frame, text="Local OS Configuration:", font=ctk.CTkFont(size=13, weight="bold"), text_color="gray70").pack(anchor="w", padx=20, pady=(20, 5))
-        ctk.CTkLabel(status_frame, text=status_text, font=ctk.CTkFont(size=18, weight="bold"), text_color=status_color).pack(anchor="w", padx=20, pady=0)
-        ctk.CTkLabel(status_frame, text=desc, font=ctk.CTkFont(size=12), text_color="gray80", wraplength=440, justify="left").pack(anchor="w", padx=20, pady=(5, 10))
+        ctk.CTkLabel(status_frame, text="Local OS Configuration:", font=ctk.CTkFont(size=12, weight="bold"), text_color="gray70").pack(anchor="w", padx=15, pady=(12, 2))
+        ctk.CTkLabel(status_frame, text=status_text, font=ctk.CTkFont(size=15, weight="bold"), text_color=status_color).pack(anchor="w", padx=15, pady=0)
+        ctk.CTkLabel(status_frame, text=desc, font=ctk.CTkFont(size=11), text_color="gray80", wraplength=480, justify="left").pack(anchor="w", padx=15, pady=(2, 8))
 
-        ctk.CTkLabel(status_frame, text="Ad-Blocking / Tracking Shield:", font=ctk.CTkFont(size=13, weight="bold"), text_color="gray70").pack(anchor="w", padx=20, pady=(10, 5))
-        shield_lbl = ctk.CTkLabel(status_frame, text="Testing domains...", font=ctk.CTkFont(size=16, weight="bold"), text_color="yellow")
-        shield_lbl.pack(anchor="w", padx=20, pady=0)
-        shield_desc = ctk.CTkLabel(status_frame, text="Waiting for resolver response...", font=ctk.CTkFont(size=12), text_color="gray80", wraplength=440, justify="left")
-        shield_desc.pack(anchor="w", padx=20, pady=(5, 20))
+        # 2. DNSSEC Validation Status
+        ctk.CTkLabel(status_frame, text="DNSSEC Validation Enforcement:", font=ctk.CTkFont(size=12, weight="bold"), text_color="gray70").pack(anchor="w", padx=15, pady=(5, 2))
+        dnssec_lbl = ctk.CTkLabel(status_frame, text="Testing DNSSEC validation...", font=ctk.CTkFont(size=14, weight="bold"), text_color="yellow")
+        dnssec_lbl.pack(anchor="w", padx=15, pady=0)
+        dnssec_desc = ctk.CTkLabel(status_frame, text="Checking signature verification...", font=ctk.CTkFont(size=11), text_color="gray80", wraplength=480, justify="left")
+        dnssec_desc.pack(anchor="w", padx=15, pady=(2, 8))
 
-        def run_shield():
+        # 3. DoH TLS Endpoint Connection Diagnostics
+        ctk.CTkLabel(status_frame, text="DoH TLS Endpoint Status:", font=ctk.CTkFont(size=12, weight="bold"), text_color="gray70").pack(anchor="w", padx=15, pady=(5, 2))
+        tls_lbl = ctk.CTkLabel(status_frame, text="Inspecting TLS endpoint...", font=ctk.CTkFont(size=14, weight="bold"), text_color="yellow")
+        tls_lbl.pack(anchor="w", padx=15, pady=0)
+        tls_desc = ctk.CTkLabel(status_frame, text="Testing SSL handshake...", font=ctk.CTkFont(size=11), text_color="gray80", wraplength=480, justify="left")
+        tls_desc.pack(anchor="w", padx=15, pady=(2, 8))
+
+        # 4. Ad-Blocking Shield Status
+        ctk.CTkLabel(status_frame, text="Ad-Blocking / Tracking Shield:", font=ctk.CTkFont(size=12, weight="bold"), text_color="gray70").pack(anchor="w", padx=15, pady=(5, 2))
+        shield_lbl = ctk.CTkLabel(status_frame, text="Testing trackers...", font=ctk.CTkFont(size=14, weight="bold"), text_color="yellow")
+        shield_lbl.pack(anchor="w", padx=15, pady=0)
+
+        # Run async diagnostics
+        def run_diagnostics():
+            # DNSSEC check
+            is_dnssec, dnssec_details = test_dnssec_validation()
+            if is_dnssec:
+                dnssec_lbl.configure(text="ACTIVE (DNSSEC Signatures Validated)", text_color="#00FF00")
+                dnssec_desc.configure(text=dnssec_details)
+            else:
+                dnssec_lbl.configure(text="INACTIVE (DNSSEC Signatures Unvalidated)", text_color="#FF9900")
+                dnssec_desc.configure(text=dnssec_details)
+
+            # TLS check
+            doh_url = active_prof.get('doh', '') if active_prof else ''
+            is_tls, tls_ver, tls_details = test_doh_tls_status(doh_url)
+            if is_tls:
+                tls_lbl.configure(text=f"CONNECTED ({tls_ver})", text_color="#00FF00")
+                tls_desc.configure(text=tls_details)
+            else:
+                tls_lbl.configure(text="DISCONNECTED", text_color="#D9534F")
+                tls_desc.configure(text=tls_details)
+
+            # Shield check
             is_active, blocked, total = test_adblocking()
             if is_active:
                 shield_lbl.configure(text=f"ACTIVE ({blocked}/{total} trackers blocked)", text_color="#00FF00")
-                shield_desc.configure(text="Your DNS is actively blocking ads and telemetry domains at the network level.")
             elif blocked > 0:
                 shield_lbl.configure(text=f"PARTIAL ({blocked}/{total} trackers blocked)", text_color="#FF9900")
-                shield_desc.configure(text="Your DNS is blocking some trackers, but not all common ones.")
             else:
                 shield_lbl.configure(text=f"INACTIVE (0/{total} trackers blocked)", text_color="#D9534F")
-                shield_desc.configure(text="Your DNS does not appear to be blocking ads or trackers.")
 
-        threading.Thread(target=run_shield, daemon=True).start()
+        threading.Thread(target=run_diagnostics, daemon=True).start()
 
-        ctk.CTkLabel(
-            win, text="To perform a deep diagnostic test of your network routing and verify there are no hidden leaks, please run an external web test.",
-            font=ctk.CTkFont(size=12), text_color="gray50", wraplength=480
-        ).pack(pady=(0, 15))
+        # Modal action buttons (Flush Cache & Leak Test)
+        btn_frame = ctk.CTkFrame(win, fg_color="transparent")
+        btn_frame.pack(fill="x", padx=20, pady=(10, 15))
 
-        btn = ctk.CTkButton(
-            win, text="Run Advanced Leak Test", command=lambda: webbrowser.open("https://dnsleaktest.com"),
-            height=40, width=220, fg_color="#C9302C", hover_color="#AC2925", font=ctk.CTkFont(weight="bold")
+        def modal_flush():
+            success, msg = flush_dns_cache()
+            if success:
+                self.status_label.configure(text="✅ DNS Cache Flushed!", text_color="#00FF00")
+            else:
+                self.status_label.configure(text=f"❌ {msg}", text_color="#D9534F")
+
+        flush_modal_btn = ctk.CTkButton(
+            btn_frame, text="🧹 Flush DNS Cache", command=modal_flush, height=36, width=170,
+            fg_color="#333333", hover_color="#555555", font=ctk.CTkFont(weight="bold", size=12)
         )
-        btn.pack(pady=(0, 20))
+        flush_modal_btn.pack(side="left", padx=(0, 10))
+
+        leak_btn = ctk.CTkButton(
+            btn_frame, text="Run Advanced Leak Test", command=lambda: webbrowser.open("https://dnsleaktest.com"),
+            height=36, width=210, fg_color="#C9302C", hover_color="#AC2925", font=ctk.CTkFont(weight="bold", size=12)
+        )
+        leak_btn.pack(side="right")
 
     def apply_dns_action(self):
         if self.is_applying:

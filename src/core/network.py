@@ -128,6 +128,30 @@ def ping_profile(profile: dict) -> int | None:
     except Exception:
         return None
 
+def benchmark_profiles(profiles: list[dict], samples_count: int = 3) -> tuple[str | None, dict[str, int]]:
+    """
+    Performs multiple latency probes per DNS provider to find the average lowest-latency provider.
+    Returns: (fastest_profile_id: str | None, results_dict: dict[profile_id, avg_ms])
+    """
+    results = {}
+    valid_profiles = [p for p in profiles if p['id'] != 'clear' and p.get('ipv4')]
+    
+    for p in valid_profiles:
+        pid = p['id']
+        samples = []
+        for _ in range(samples_count):
+            ms = ping_profile(p)
+            if ms is not None:
+                samples.append(ms)
+            time.sleep(0.05)
+        
+        if samples:
+            avg_ms = int(sum(samples) / len(samples))
+            results[pid] = avg_ms
+
+    fastest_id = min(results, key=results.get) if results else None
+    return fastest_id, results
+
 def _win32_icmp_ping(ip_str: str) -> int | None:
     """Win32 native ICMP Echo for fallback ping without launching ping.exe subprocess."""
     try:
