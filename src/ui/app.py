@@ -560,7 +560,7 @@ class CipherDNSApp(ctk.CTk):
         self.apply_btn.pack(side="right", padx=12, pady=11)
 
         self.security_btn = ctk.CTkButton(
-            self.bottom_frame, text="🛡️ Security Check", command=self.open_security_check, height=52, width=165,
+            self.bottom_frame, text="🛡️ Deep Leak Audit", command=self.open_security_check, height=52, width=165,
             font=ctk.CTkFont(weight="bold", size=14), fg_color="#262626", hover_color="#444444", corner_radius=8
         )
         self.security_btn.pack(side="right", padx=0, pady=11)
@@ -868,116 +868,20 @@ class CipherDNSApp(ctk.CTk):
         btn.pack(pady=15)
 
     def open_security_check(self):
-        import webbrowser
-
-        win = ctk.CTkToplevel(self)
-        win.title("DNS Security & Diagnostics Check")
-        win.geometry("560x540")
-        win.attributes("-topmost", True)
-        win.resizable(False, False)
-
-        assets_dir = get_resource_path("assets")
-        app_icon_path = os.path.join(assets_dir, "app_icon.ico")
-        if os.path.exists(app_icon_path):
-            win.after(200, lambda: win.iconbitmap(app_icon_path))
-
-        win.update_idletasks()
-        x = self.winfo_x() + (self.winfo_width() - 560) // 2
-        y = self.winfo_y() + (self.winfo_height() - 540) // 2
-        win.geometry(f"+{x}+{y}")
-
-        ctk.CTkLabel(win, text="DNS Security & Diagnostics Check", font=ctk.CTkFont(size=18, weight="bold"), text_color="#D9534F").pack(pady=(15, 10))
-
-        status_frame = ctk.CTkFrame(win, fg_color="#121212", corner_radius=10)
-        status_frame.pack(fill="both", expand=True, padx=20, pady=5)
+        from src.ui.modals.leak_modal import DeepLeakAuditModal
 
         adapter = self.adapter_var.get()
-        active_prof = None
+        active_prof_name = "Cloudflare"
+        doh_url = "https://cloudflare-dns.com/dns-query"
+
         if adapter and adapter not in ["No active adapter", "Scanning adapters..."]:
             prof_id = get_active_profile(adapter, self.profiles)
             active_prof = next((p for p in self.profiles if p['id'] == prof_id), None)
+            if active_prof:
+                active_prof_name = active_prof.get("name", "Custom DNS")
+                doh_url = active_prof.get("doh_v4", {}).get("template", "") or active_prof.get("doh_template", "")
 
-        # 1. OS Configuration Encryption Status
-        if not active_prof or active_prof['id'] == 'clear':
-            status_text = "INSECURE (Standard DNS)"
-            status_color = "#D9534F"
-            desc = "Your DNS queries are currently unencrypted and visible to your ISP."
-        else:
-            status_text = "SECURE (Encrypted DoH)"
-            status_color = "#00FF00"
-            desc = f"Your DNS queries are encrypted using {active_prof['name']}."
-
-        ctk.CTkLabel(status_frame, text="Local OS Configuration:", font=ctk.CTkFont(size=12, weight="bold"), text_color="gray70").pack(anchor="w", padx=15, pady=(12, 2))
-        ctk.CTkLabel(status_frame, text=status_text, font=ctk.CTkFont(size=15, weight="bold"), text_color=status_color).pack(anchor="w", padx=15, pady=0)
-        ctk.CTkLabel(status_frame, text=desc, font=ctk.CTkFont(size=11), text_color="gray80", wraplength=480, justify="left").pack(anchor="w", padx=15, pady=(2, 8))
-
-        # 2. DNSSEC Validation Status
-        ctk.CTkLabel(status_frame, text="DNSSEC Validation Enforcement:", font=ctk.CTkFont(size=12, weight="bold"), text_color="gray70").pack(anchor="w", padx=15, pady=(5, 2))
-        dnssec_lbl = ctk.CTkLabel(status_frame, text="Testing DNSSEC validation...", font=ctk.CTkFont(size=14, weight="bold"), text_color="yellow")
-        dnssec_lbl.pack(anchor="w", padx=15, pady=0)
-        dnssec_desc = ctk.CTkLabel(status_frame, text="Checking signature verification...", font=ctk.CTkFont(size=11), text_color="gray80", wraplength=480, justify="left")
-        dnssec_desc.pack(anchor="w", padx=15, pady=(2, 8))
-
-        # 3. DoH TLS Endpoint Connection Diagnostics
-        ctk.CTkLabel(status_frame, text="DoH TLS Endpoint Status:", font=ctk.CTkFont(size=12, weight="bold"), text_color="gray70").pack(anchor="w", padx=15, pady=(5, 2))
-        tls_lbl = ctk.CTkLabel(status_frame, text="Inspecting TLS endpoint...", font=ctk.CTkFont(size=14, weight="bold"), text_color="yellow")
-        tls_lbl.pack(anchor="w", padx=15, pady=0)
-        tls_desc = ctk.CTkLabel(status_frame, text="Testing SSL handshake...", font=ctk.CTkFont(size=11), text_color="gray80", wraplength=480, justify="left")
-        tls_desc.pack(anchor="w", padx=15, pady=(2, 8))
-
-        # 4. Ad-Blocking Shield Status
-        ctk.CTkLabel(status_frame, text="Ad-Blocking / Tracking Shield:", font=ctk.CTkFont(size=12, weight="bold"), text_color="gray70").pack(anchor="w", padx=15, pady=(5, 2))
-        shield_lbl = ctk.CTkLabel(status_frame, text="Testing trackers...", font=ctk.CTkFont(size=14, weight="bold"), text_color="yellow")
-        shield_lbl.pack(anchor="w", padx=15, pady=0)
-
-        # Run async diagnostics
-        def run_diagnostics():
-            # DNSSEC check
-            is_dnssec, dnssec_details = test_dnssec_validation()
-            if is_dnssec:
-                dnssec_lbl.configure(text="ACTIVE (DNSSEC Signatures Validated)", text_color="#00FF00")
-                dnssec_desc.configure(text=dnssec_details)
-            else:
-                dnssec_lbl.configure(text="INACTIVE (DNSSEC Signatures Unvalidated)", text_color="#FF9900")
-                dnssec_desc.configure(text=dnssec_details)
-
-            # TLS check
-            doh_url = active_prof.get('doh', '') if active_prof else ''
-            is_tls, tls_ver, tls_details = test_doh_tls_status(doh_url)
-            if is_tls:
-                tls_lbl.configure(text=f"CONNECTED ({tls_ver})", text_color="#00FF00")
-                tls_desc.configure(text=tls_details)
-            else:
-                tls_lbl.configure(text="DISCONNECTED", text_color="#D9534F")
-                tls_desc.configure(text=tls_details)
-
-            # Shield check
-            is_active, blocked, total = test_adblocking()
-            if is_active:
-                shield_lbl.configure(text=f"ACTIVE ({blocked}/{total} trackers blocked)", text_color="#00FF00")
-            elif blocked > 0:
-                shield_lbl.configure(text=f"PARTIAL ({blocked}/{total} trackers blocked)", text_color="#FF9900")
-            else:
-                shield_lbl.configure(text=f"INACTIVE (0/{total} trackers blocked)", text_color="#D9534F")
-
-        threading.Thread(target=run_diagnostics, daemon=True).start()
-
-        # Modal action buttons (Flush Cache & Leak Test)
-        btn_frame = ctk.CTkFrame(win, fg_color="transparent")
-        btn_frame.pack(fill="x", padx=20, pady=(10, 15))
-
-        def modal_flush():
-            success, msg = flush_dns_cache()
-            if success:
-                self.status_label.configure(text="✅ DNS Cache Flushed!", text_color="#00FF00")
-            else:
-                self.status_label.configure(text=f"❌ {msg}", text_color="#D9534F")
-
-        flush_modal_btn = ctk.CTkButton(
-            btn_frame, text="🧹 Flush DNS Cache", command=modal_flush, height=36, width=170,
-            fg_color="#333333", hover_color="#555555", font=ctk.CTkFont(weight="bold", size=12)
-        )
-        flush_modal_btn.pack(side="left", padx=(0, 10))
+        DeepLeakAuditModal(self, active_provider_name=active_prof_name, doh_url=doh_url)
 
         leak_btn = ctk.CTkButton(
             btn_frame, text="Run Advanced Leak Test", command=lambda: webbrowser.open("https://dnsleaktest.com"),
