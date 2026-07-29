@@ -560,8 +560,8 @@ class CipherDNSApp(ctk.CTk):
         self.apply_btn.pack(side="right", padx=12, pady=11)
 
         self.security_btn = ctk.CTkButton(
-            self.bottom_frame, text="🛡️ Deep Leak Audit", command=self.open_security_check, height=52, width=165,
-            font=ctk.CTkFont(weight="bold", size=14), fg_color="#262626", hover_color="#444444", corner_radius=8
+            self.bottom_frame, text="🔍 Leak Audit", command=self.open_security_check, height=52, width=140,
+            font=ctk.CTkFont(weight="bold", size=13), fg_color="#262626", hover_color="#444444", corner_radius=8
         )
         self.security_btn.pack(side="right", padx=0, pady=11)
 

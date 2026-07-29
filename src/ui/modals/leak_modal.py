@@ -1,7 +1,9 @@
 import customtkinter as ctk
 import threading
+import os
 from typing import Optional, Dict, Any, List
 
+from src.core.config import get_resource_path
 from src.core.leak_test import run_deep_dns_leak_test
 
 class DeepLeakAuditModal(ctk.CTkToplevel):
@@ -13,18 +15,21 @@ class DeepLeakAuditModal(ctk.CTkToplevel):
         self.doh_url = doh_url
         
         self.title("CipherDNS - Deep Security & Privacy Audit")
-        self.geometry("940x700")
+        self.geometry("940x680")
         self.resizable(False, False)
         self.configure(fg_color="#0F0F0F")
         
+        # Window Icon
+        assets_dir = get_resource_path("assets")
+        app_icon_path = os.path.join(assets_dir, "app_icon.ico")
+        if os.path.exists(app_icon_path):
+            self.after(200, lambda: self.iconbitmap(app_icon_path))
+            
         # Center relative to parent
         self.transient(parent)
         self.grab_set()
         
         self.build_ui()
-        
-        # Start audit in background thread
-        threading.Thread(target=self._execute_audit, daemon=True).start()
 
     def build_ui(self):
         # 1. Top Header Frame
@@ -33,7 +38,7 @@ class DeepLeakAuditModal(ctk.CTkToplevel):
         
         title_label = ctk.CTkLabel(
             header_frame, 
-            text="🛡️ Deep Security & DNS Leak Audit", 
+            text="🔍 Deep Security & DNS Leak Audit", 
             font=ctk.CTkFont(family="Segoe UI", size=22, weight="bold"),
             text_color="#FFFFFF"
         )
@@ -47,9 +52,55 @@ class DeepLeakAuditModal(ctk.CTkToplevel):
         )
         subtitle_label.pack(anchor="w", padx=20, pady=(0, 15))
 
-        # 2. Progress & Status Bar Frame
+        # 2. Welcome / Explanation Card (Initial View)
+        self.intro_frame = ctk.CTkFrame(self, fg_color="#141414", corner_radius=10)
+        self.intro_frame.pack(fill="both", expand=True, padx=20, pady=10)
+
+        intro_title = ctk.CTkLabel(
+            self.intro_frame,
+            text="What will this audit test?",
+            font=ctk.CTkFont(family="Segoe UI", size=18, weight="bold"),
+            text_color="#FFFFFF"
+        )
+        intro_title.pack(anchor="w", padx=25, pady=(20, 10))
+
+        features = [
+            ("🔍 1. Multi-Round Resolver Matrix", "Sends 36 unique UUID subdomains across IPv4/IPv6 to verify if unencrypted ISP DNS servers are leaking queries."),
+            ("🔒 2. DoH TLS 1.3 Handshake & Certs", "Audits active DoH socket connection, TLS version, cipher suite, and certificate authenticity."),
+            ("🛡️ 3. DNSSEC Signature Validation", "Resolves dnssec-failed.org to test if your resolver actively blocks invalid/spoofed DNSSEC signatures."),
+            ("⛨ 4. Ad & Tracker Shield Verification", "Probes network-level blocking of tracking and telemetry domains."),
+            ("🌐 5. Transparent ISP Proxy Check", "Tests if your ISP intercepts unencrypted UDP 53 packets in the background.")
+        ]
+
+        for title, desc in features:
+            f_box = ctk.CTkFrame(self.intro_frame, fg_color="#1C1C1C", corner_radius=8)
+            f_box.pack(fill="x", padx=25, pady=4)
+            
+            t_lbl = ctk.CTkLabel(f_box, text=title, font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"), text_color="#D9534F")
+            t_lbl.pack(anchor="w", padx=15, pady=(6, 0))
+            
+            d_lbl = ctk.CTkLabel(f_box, text=desc, font=ctk.CTkFont(family="Segoe UI", size=11), text_color="#B0B0B0", justify="left")
+            d_lbl.pack(anchor="w", padx=15, pady=(0, 6))
+
+        # Centered Start Audit Button
+        start_box = ctk.CTkFrame(self.intro_frame, fg_color="transparent")
+        start_box.pack(pady=20)
+
+        self.start_btn = ctk.CTkButton(
+            start_box,
+            text="🚀 Start Leak Audit",
+            font=ctk.CTkFont(family="Segoe UI", size=15, weight="bold"),
+            fg_color="#D9534F",
+            hover_color="#C9302C",
+            height=46,
+            width=230,
+            corner_radius=8,
+            command=self._on_start_click
+        )
+        self.start_btn.pack()
+
+        # 3. Progress & Status Bar Frame (Initially Hidden)
         self.progress_frame = ctk.CTkFrame(self, fg_color="#141414", corner_radius=10)
-        self.progress_frame.pack(fill="x", padx=20, pady=10)
         
         self.status_label = ctk.CTkLabel(
             self.progress_frame,
@@ -57,16 +108,28 @@ class DeepLeakAuditModal(ctk.CTkToplevel):
             font=ctk.CTkFont(family="Segoe UI", size=13, weight="bold"),
             text_color="#4F53D9"
         )
-        self.status_label.pack(anchor="w", padx=20, pady=(15, 8))
         
         self.progress_bar = ctk.CTkProgressBar(self.progress_frame, height=10, corner_radius=5)
         self.progress_bar.set(0.05)
         self.progress_bar.configure(progress_color="#D9534F")
+
+        # 4. Main Results Scroll Container (Initially Hidden)
+        self.results_scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
+
+    def _on_start_click(self):
+        # Hide intro view
+        self.intro_frame.pack_forget()
+
+        # Show progress frame
+        self.progress_frame.pack(fill="x", padx=20, pady=10)
+        self.status_label.pack(anchor="w", padx=20, pady=(15, 8))
         self.progress_bar.pack(fill="x", padx=20, pady=(0, 15))
 
-        # 3. Main Results Container (Hidden until audit completes)
-        self.results_scroll = ctk.CTkScrollableFrame(self, fg_color="transparent")
+        # Show results container
         self.results_scroll.pack(fill="both", expand=True, padx=20, pady=10)
+
+        # Execute audit in background thread
+        threading.Thread(target=self._execute_audit, daemon=True).start()
 
     def _execute_audit(self):
         def update_progress(msg: str, pct: float):
@@ -85,7 +148,6 @@ class DeepLeakAuditModal(ctk.CTkToplevel):
         self.progress_bar.set(pct)
 
     def _render_results(self, results: Dict[str, Any]):
-        # Update progress frame header
         self.status_label.configure(text="Audit Completed!", text_color="#2ECC71")
         self.progress_bar.set(1.0)
 
@@ -164,7 +226,6 @@ class DeepLeakAuditModal(ctk.CTkToplevel):
                 
                 status_color = "#E74C3C" if item.get("is_leak") else "#2ECC71"
                 
-                # IP & Provider Name
                 left_box = ctk.CTkFrame(r_card, fg_color="transparent")
                 left_box.pack(side="left", padx=15, pady=10)
                 
@@ -174,7 +235,6 @@ class DeepLeakAuditModal(ctk.CTkToplevel):
                 prov_lbl = ctk.CTkLabel(left_box, text=f"{item.get('provider')} ({item.get('country')})", font=ctk.CTkFont(family="Segoe UI", size=12), text_color="#A0A0A0")
                 prov_lbl.pack(anchor="w")
                 
-                # Status Badge
                 badge = ctk.CTkLabel(
                     r_card,
                     text=item.get("status_text", ""),
@@ -187,7 +247,7 @@ class DeepLeakAuditModal(ctk.CTkToplevel):
                 )
                 badge.pack(side="right", padx=15, pady=10)
 
-        # Close / Re-run Buttons Frame at bottom
+        # Close Button Frame
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
         btn_frame.pack(fill="x", padx=20, pady=(0, 20))
         
