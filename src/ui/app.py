@@ -446,74 +446,86 @@ class CipherDNSApp(ctk.CTk):
         save_settings(self.app_settings)
 
     def build_ui(self):
-        self.header = ctk.CTkLabel(self, text="🛡️ CipherDNS", font=ctk.CTkFont(size=30, weight="bold"), text_color="#D9534F")
-        self.header.pack(pady=(20, 0))
+        # === 3-ZONE INTEGRATED DASHBOARD HEADER ===
+        self.header_container = ctk.CTkFrame(self, fg_color="transparent")
+        self.header_container.pack(fill="x", padx=25, pady=(18, 10))
 
-        self.subtitle = ctk.CTkLabel(self, text="Modern DNS over HTTPS (DoH) Manager", font=ctk.CTkFont(size=14), text_color="gray")
-        self.subtitle.pack(pady=(2, 12))
+        # --- LEFT ZONE: Network Adapter Card ---
+        self.adapter_card = ctk.CTkFrame(self.header_container, fg_color="#121212", corner_radius=10)
+        self.adapter_card.pack(side="left", anchor="n", padx=(0, 10), ipady=6, ipadx=10)
 
-        self.legend_frame = ctk.CTkFrame(self, fg_color="#1A1A1A", corner_radius=12)
-        self.legend_frame.pack(pady=(0, 15), ipady=4, ipadx=12)
-
-        items = [("⛨ Malware", "#FF6B6B"), ("⊘ Ads", "#FDCB6E"), ("◉ Trackers", "#74B9FF"), ("♥ Family", "#55EFC4")]
-        for i, (text, color) in enumerate(items):
-            lbl = ctk.CTkLabel(self.legend_frame, text=text, font=ctk.CTkFont(size=13, weight="bold"), text_color=color)
-            lbl.pack(side="left", padx=12)
-            if i < len(items) - 1:
-                sep = ctk.CTkLabel(self.legend_frame, text="•", font=ctk.CTkFont(size=13), text_color="gray40")
-                sep.pack(side="left")
-
-        self.top_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.top_frame.pack(fill="x", padx=28, pady=8)
-
-        self.left_frame = ctk.CTkFrame(self.top_frame, fg_color="transparent")
-        self.left_frame.pack(side="left", anchor="n")
-
-        ctk.CTkLabel(self.left_frame, text="Network Adapter:", font=ctk.CTkFont(weight="bold", size=13)).pack(anchor="w", pady=(0, 6))
+        ctk.CTkLabel(self.adapter_card, text="Network Adapter", font=ctk.CTkFont(weight="bold", size=12), text_color="gray70").pack(anchor="w", padx=8, pady=(4, 2))
 
         default_adapter = self.adapters[0] if self.adapters else "Scanning adapters..."
         self.adapter_var = ctk.StringVar(value=default_adapter)
         self.adapter_menu = ctk.CTkOptionMenu(
-            self.left_frame,
+            self.adapter_card,
             values=self.adapters if self.adapters else ["Scanning adapters..."],
             variable=self.adapter_var,
-            width=220,
-            fg_color="#1A1A1A",
+            width=210,
+            fg_color="#1E1E1E",
             button_color="#C9302C",
             button_hover_color="#AC2925",
             command=self.on_adapter_change
         )
-        self.adapter_menu.pack(anchor="w")
+        self.adapter_menu.pack(anchor="w", padx=8, pady=(0, 4))
 
-        self.right_frame = ctk.CTkFrame(self.top_frame, fg_color="transparent")
-        self.right_frame.pack(side="right", anchor="n")
+        # --- CENTER ZONE: App Title & Feature Legend Pill ---
+        self.center_card = ctk.CTkFrame(self.header_container, fg_color="transparent")
+        self.center_card.pack(side="left", expand=True, fill="both")
+
+        self.header = ctk.CTkLabel(self.center_card, text="🛡️ CipherDNS", font=ctk.CTkFont(size=28, weight="bold"), text_color="#D9534F")
+        self.header.pack(anchor="center", pady=(0, 0))
+
+        self.subtitle = ctk.CTkLabel(self.center_card, text="Modern DNS over HTTPS (DoH) Manager", font=ctk.CTkFont(size=12), text_color="gray")
+        self.subtitle.pack(anchor="center", pady=(0, 6))
+
+        self.legend_frame = ctk.CTkFrame(self.center_card, fg_color="#1A1A1A", corner_radius=12)
+        self.legend_frame.pack(anchor="center", ipady=2, ipadx=8)
+
+        items = [("⛨ Malware", "#FF6B6B"), ("⊘ Ads", "#FDCB6E"), ("◉ Trackers", "#74B9FF"), ("♥ Family", "#55EFC4")]
+        for i, (text, color) in enumerate(items):
+            lbl = ctk.CTkLabel(self.legend_frame, text=text, font=ctk.CTkFont(size=12, weight="bold"), text_color=color)
+            lbl.pack(side="left", padx=8)
+            if i < len(items) - 1:
+                sep = ctk.CTkLabel(self.legend_frame, text="•", font=ctk.CTkFont(size=11), text_color="gray40")
+                sep.pack(side="left")
+
+        # --- RIGHT ZONE: Controls & Switches Card ---
+        self.switches_card = ctk.CTkFrame(self.header_container, fg_color="#121212", corner_radius=10)
+        self.switches_card.pack(side="right", anchor="n", padx=(10, 0), ipady=6, ipadx=10)
+
+        # Row 1: Strict DoH
+        self.row1_frame = ctk.CTkFrame(self.switches_card, fg_color="transparent")
+        self.row1_frame.pack(fill="x", padx=8, pady=(2, 2))
 
         self.fallback_var = ctk.BooleanVar(value=False)
-        self.fallback_switch = ctk.CTkSwitch(self.right_frame, text="Strict DoH ", variable=self.fallback_var, progress_color="#C9302C")
-        self.fallback_switch.grid(row=0, column=0, sticky="w", pady=(0, 4))
+        self.fallback_switch = ctk.CTkSwitch(self.row1_frame, text="Strict DoH ", variable=self.fallback_var, progress_color="#C9302C", font=ctk.CTkFont(size=12))
+        self.fallback_switch.pack(side="left")
 
         self.info_btn = ctk.CTkButton(
-            self.right_frame, text="?", width=22, height=22, corner_radius=11,
-            fg_color="#333333", hover_color="#C9302C", font=ctk.CTkFont(weight="bold", size=11), command=self.show_doh_info
+            self.row1_frame, text="?", width=20, height=20, corner_radius=10,
+            fg_color="#333333", hover_color="#C9302C", font=ctk.CTkFont(weight="bold", size=10), command=self.show_doh_info
         )
-        self.info_btn.grid(row=0, column=1, sticky="w", padx=(5, 0), pady=(0, 4))
+        self.info_btn.pack(side="left", padx=(4, 0))
 
+        # Row 2: Auto-Switch
         self.auto_switch_var = ctk.BooleanVar(value=self.app_settings.get("auto_switch", False))
         self.auto_switch_chk = ctk.CTkSwitch(
-            self.right_frame, text="Auto-Switch (Smart Memory)", variable=self.auto_switch_var, progress_color="#00CC00", command=self.on_autoswitch_toggle
+            self.switches_card, text="Auto-Switch (Smart Memory)", variable=self.auto_switch_var, progress_color="#00CC00", command=self.on_autoswitch_toggle, font=ctk.CTkFont(size=12)
         )
-        self.auto_switch_chk.grid(row=1, column=0, columnspan=2, sticky="w", pady=(0, 4))
+        self.auto_switch_chk.pack(anchor="w", padx=8, pady=(2, 2))
 
-        # Windows Auto-Start Switch
+        # Row 3: Windows Auto-Start
         self.autostart_var = ctk.BooleanVar(value=is_autostart_enabled())
         self.autostart_chk = ctk.CTkSwitch(
-            self.right_frame, text="Start with Windows", variable=self.autostart_var, progress_color="#00CC00", command=self.on_autostart_toggle
+            self.switches_card, text="Start with Windows", variable=self.autostart_var, progress_color="#00CC00", command=self.on_autostart_toggle, font=ctk.CTkFont(size=12)
         )
-        self.autostart_chk.grid(row=2, column=0, columnspan=2, sticky="w")
+        self.autostart_chk.pack(anchor="w", padx=8, pady=(2, 2))
 
-        # Cards Section Header
+        # === CARDS SECTION HEADER ===
         self.cards_header_frame = ctk.CTkFrame(self, fg_color="transparent")
-        self.cards_header_frame.pack(fill="x", padx=30, pady=(10, 5))
+        self.cards_header_frame.pack(fill="x", padx=30, pady=(15, 5))
 
         self.cards_title = ctk.CTkLabel(self.cards_header_frame, text="Available DNS Providers", font=ctk.CTkFont(weight="bold", size=16))
         self.cards_title.pack(side="left")
@@ -531,7 +543,7 @@ class CipherDNSApp(ctk.CTk):
 
         self.card_widgets = []
 
-        # --- SPACIOUS BOTTOM BAR ---
+        # === SPACIOUS BOTTOM BAR ===
         self.bottom_frame = ctk.CTkFrame(self, fg_color="#121212", corner_radius=10, height=74)
         self.bottom_frame.pack(fill="x", side="bottom", padx=25, pady=(0, 12))
         self.bottom_frame.pack_propagate(False)
