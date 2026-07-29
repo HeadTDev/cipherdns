@@ -148,9 +148,17 @@ def run_deep_dns_leak_test(
                     
     except Exception as e:
         log(f"Live Leak Probe Notice: API query fallback ({str(e)}). Testing active socket endpoints...", 0.90)
-        # Fallback inspection if API is temporarily unavailable
+        # Fallback inspection if API is rate-limited or temporarily unavailable
         try:
-            active_ip = socket.gethostbyname("1.1.1.1" if "cloudflare" in doh_url.lower() else "dns.quad9.net")
+            parsed_doh = urllib.parse.urlparse(doh_url if doh_url.startswith("http") else f"https://{doh_url}")
+            doh_hostname = parsed_doh.hostname or "1.1.1.1"
+            
+            # Resolve actual IP for active DoH provider hostname
+            try:
+                active_ip = socket.gethostbyname(doh_hostname)
+            except Exception:
+                active_ip = doh_hostname
+                
             resolvers_found.append({
                 "ip": active_ip,
                 "provider": f"{active_provider_name} DoH Gateway",
